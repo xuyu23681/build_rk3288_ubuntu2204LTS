@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04  # Switch to 20.04 for Python 3.8, no imp deprecation
+    runs-on: ubuntu-22.04  # Switch to 20.04 for Python 3.8, no imp deprecation
 
     steps:
       - name: Checkout repository
