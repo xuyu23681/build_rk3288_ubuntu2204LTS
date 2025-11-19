@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Switch to 20.04 for Python 3.8, no imp deprecation
+    runs-on: ubuntu-22.04  # Using 22.04 with latest repo tool to avoid old repo issues
 
     steps:
       - name: Checkout repository
@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools \
+          sudo apt-get install -y git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools \
             parted libudev-dev libusb-1.0-0-dev libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl \
             sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip \
             rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu \
@@ -27,6 +27,7 @@ jobs:
             python3-matplotlib libc6-i386 texinfo liblz4-tool genext2fs expect autoconf intltool \
             debootstrap qemu-user-static binfmt-support p7zip-full
           sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386
+          # NOTE: Do NOT install 'repo' via apt; it's outdated and causes formatter/imp errors
 
       - name: Install latest repo tool
         run: |
