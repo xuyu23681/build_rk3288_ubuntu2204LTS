@@ -1,0 +1,86 @@
+name: Compile Ubuntu 22.04 LTS Firmware for Firefly RK3288
+
+on:
+  workflow_dispatch:
+    inputs:
+      ubuntu_version:
+        description: 'Ubuntu version (default: jammy for 22.04 LTS)'
+        required: false
+        default: 'jammy'
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04  # Wiki recommended environment for stability
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools \
+            parted libudev-dev libusb-1.0-0-dev python3-linaro-image-tools linaro-image-tools libssl-dev \
+            autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash \
+            patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev \
+            openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop libssl-dev \
+            libglade2-dev cvs mercurial subversion asciidoc w3m dblatex graphviz python3-matplotlib \
+            libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libqt4-dev libgtk2.0-dev \
+            debootstrap qemu-user-static binfmt-support 7zip
+
+      - name: Initialize and sync SDK
+        run: |
+          mkdir sdk && cd sdk
+          repo init --no-clone-bundle --repo-url https://gitlab.com/firefly-linux/git-repo.git \
+            -u https://gitlab.com/firefly-linux/manifests.git -b master -m rk3288_linux_release.xml
+          repo sync -c --no-tags
+          repo start firefly --all
+
+      - name: Configure board for Ubuntu
+        run: |
+          cd sdk
+          ./build.sh firefly-rk3288-ubuntu.mk
+          # Verify configuration (optional, for logging)
+          cat device/rockchip/.BoardConfig.mk
+
+      - name: Partial compilation (uboot, kernel, recovery)
+        run: |
+          cd sdk
+          ./build.sh uboot
+          ./build.sh kernel
+          ./build.sh recovery
+
+      - name: Build Ubuntu RootFS with debootstrap
+        run: |
+          sudo mkdir -p ubuntu_rootfs
+          sudo debootstrap --arch=armhf --foreign ${{ inputs.ubuntu_version }} ubuntu_rootfs http://ports.ubuntu.com/ubuntu-ports/
+          sudo cp /usr/bin/qemu-arm-static ubuntu_rootfs/usr/bin/
+          sudo chroot ubuntu_rootfs /debootstrap/debootstrap --second-stage
+          sudo mount -t proc proc ubuntu_rootfs/proc
+          sudo mount -o bind /dev ubuntu_rootfs/dev
+          sudo mount -o bind /sys ubuntu_rootfs/sys
+          cat << EOF | sudo chroot ubuntu_rootfs
+          export DEBIAN_FRONTEND=noninteractive
+          echo "nameserver 8.8.8.8" > /etc/resolv.conf
+          apt update
+          apt install -y ubuntu-desktop-minimal network-manager openssh-server sudo linux-firmware firmware-realtek mesa-utils
+          useradd -m -s /bin/bash firefly
+          echo firefly:firefly | chpasswd
+          usermod -aG sudo firefly
+          echo "firefly ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+          EOF
+          sudo umount ubuntu_rootfs/{proc,dev,sys}
+          mkdir sdk/ubuntu_rootfs
+          sudo genext2fs -b 4096000 -d ubuntu_rootfs/ sdk/ubuntu_rootfs/rk3288_ubuntu_rootfs.img
+
+      - name: Package firmware
+        run: |
+          cd sdk
+          ./mkfirmware.sh
+          ./build.sh updateimg
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-firmware
+          path: sdk/rockdev/pack/Image-firefly-rk3288-ubuntu.img
