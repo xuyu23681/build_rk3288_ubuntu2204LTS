@@ -29,15 +29,12 @@ jobs:
           sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386
           # NOTE: Do NOT install 'repo' via apt; it's outdated and causes formatter/imp errors
 
-      - name: Install latest repo tool
+      - name: Install latest repo tool and sync SDK
         run: |
           mkdir -p ~/.bin
           PATH="~/.bin:$PATH"
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
           chmod a+rx ~/.bin/repo
-
-      - name: Initialize and sync SDK
-        run: |
           mkdir sdk && cd sdk
           repo init --no-clone-bundle --repo-url https://gitlab.com/firefly-linux/git-repo.git \
             -u https://gitlab.com/firefly-linux/manifests.git -b master -m rk3288_linux_release.xml
