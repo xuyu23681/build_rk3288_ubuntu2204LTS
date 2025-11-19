@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Updated to 22.04 for compatibility, with adjusted dependencies
+    runs-on: ubuntu-20.04  # Switch to 20.04 for Python 3.8, no imp deprecation
 
     steps:
       - name: Checkout repository
@@ -26,11 +26,14 @@ jobs:
             libncurses5-dev lzop libssl-dev cvs mercurial subversion asciidoc w3m dblatex graphviz \
             python3-matplotlib libc6-i386 texinfo liblz4-tool genext2fs expect autoconf intltool \
             debootstrap qemu-user-static binfmt-support p7zip-full
-          # Note: Removed deprecated packages like python3-linaro-image-tools, linaro-image-tools, libqt4-dev, libgtk2.0-dev, libglade2-dev
-          # Use genext2fs/mke2fs for image tools, multiarch for i386
+          sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386
 
-      - name: Enable multiarch for i386
-        run: sudo dpkg --add-architecture i386 && sudo apt update && sudo apt install -y libc6:i386
+      - name: Install latest repo tool
+        run: |
+          mkdir -p ~/.bin
+          PATH="~/.bin:$PATH"
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
+          chmod a+rx ~/.bin/repo
 
       - name: Initialize and sync SDK
         run: |
