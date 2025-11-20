@@ -1,4 +1,4 @@
-name: Compile Firefly-RK3288 Ubuntu 24.04 LTS with Linux 6.6
+name: Compile Firefly-RK3288 Ubuntu 22.04 LTS with Linux 6.6
 
 on:
   push:
@@ -7,25 +7,21 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Install dependencies
         run: |
           # Enable i386 architecture for libc6:i386 and lib32stdc++6
           sudo dpkg --add-architecture i386
           
-          # Add Jammy repo for libncurses5 (obsolete in 24.04)
-          echo "deb http://archive.ubuntu.com/ubuntu jammy main universe" | sudo tee /etc/apt/sources.list.d/jammy.list
-          
-          # Install libssl1.0.0 manually (obsolete, from Bionic)
-          wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
-          sudo dpkg -i libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
+          # Add Bionic repo for libssl1.0.0 (obsolete in 22.04)
+          echo "deb http://archive.ubuntu.com/ubuntu bionic main universe" | sudo tee /etc/apt/sources.list.d/bionic.list
           
           # Update repos
           sudo apt-get update
           
           # Install minimal required packages (removed obsolete/unneeded: linaro-image-tools, libqt4-dev, libglade2-dev, cvs, mercurial, subversion)
-          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools parted libudev-dev libusb-1.0-0-dev libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop asciidoc w3m dblatex graphviz python3-matplotlib libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libgtk2.0-dev debootstrap qemu-user-static binfmt-support
+          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools parted libudev-dev libusb-1.0-0-dev libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop asciidoc w3m dblatex graphviz python3-matplotlib libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libgtk2.0-dev debootstrap qemu-user-static binfmt-support libssl1.0.0
 
       - name: Repo init and sync SDK
         run: |
@@ -61,11 +57,11 @@ jobs:
           cat kernel/arch/arm/boot/dts/rockchip/rk3288-firefly.dtb >> kernel/kernel.img  # Append DTB
           ./kernel/scripts/resource_tool kernel/arch/arm/boot/dts/rockchip/rk3288-firefly.dtb kernel/resource.img  # If resource_tool exists; else skip if not needed
 
-      - name: Build Ubuntu 24.04 LTS armhf rootfs
+      - name: Build Ubuntu 22.04 LTS armhf rootfs
         run: |
           cd sdk
           sudo mkdir -p ubuntu_rootfs
-          sudo debootstrap --arch=armhf --foreign noble ubuntu_rootfs/rootfs http://ports.ubuntu.com/ubuntu-ports
+          sudo debootstrap --arch=armhf --foreign jammy ubuntu_rootfs/rootfs http://ports.ubuntu.com/ubuntu-ports
           sudo cp /usr/bin/qemu-arm-static ubuntu_rootfs/rootfs/usr/bin/
           sudo chroot ubuntu_rootfs/rootfs /debootstrap/debootstrap --second-stage
           # Basic config (add more packages as needed)
@@ -84,5 +80,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firefly-rk3288-ubuntu-24.04-lts-linux6.6.img
+          name: firefly-rk3288-ubuntu-22.04-lts-linux6.6.img
           path: sdk/rockdev/pack/*.img
