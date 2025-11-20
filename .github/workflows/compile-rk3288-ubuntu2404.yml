@@ -11,8 +11,21 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
+          # Enable i386 architecture for libc6:i386 and lib32stdc++6
+          sudo dpkg --add-architecture i386
+          
+          # Add Jammy repo for libncurses5 (obsolete in 24.04)
+          echo "deb http://archive.ubuntu.com/ubuntu jammy main universe" | sudo tee /etc/apt/sources.list.d/jammy.list
+          
+          # Install libssl1.0.0 manually (obsolete, from Bionic)
+          wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
+          sudo dpkg -i libssl1.0.0_1.0.2n-1ubuntu5.10_amd64.deb
+          
+          # Update repos
           sudo apt-get update
-          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools parted libudev-dev libusb-1.0-0-dev python3-linaro-image-tools linaro-image-tools libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop libssl1.0.0 libssl-dev libglade2-dev cvs mercurial subversion asciidoc w3m dblatex graphviz python3-matplotlib libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libqt4-dev libgtk2.0-dev debootstrap qemu-user-static binfmt-support
+          
+          # Install minimal required packages (removed obsolete/unneeded: linaro-image-tools, libqt4-dev, libglade2-dev, cvs, mercurial, subversion)
+          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools parted libudev-dev libusb-1.0-0-dev libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop asciidoc w3m dblatex graphviz python3-matplotlib libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libgtk2.0-dev debootstrap qemu-user-static binfmt-support
 
       - name: Repo init and sync SDK
         run: |
