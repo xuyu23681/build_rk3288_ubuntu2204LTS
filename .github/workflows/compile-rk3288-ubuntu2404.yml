@@ -1,0 +1,75 @@
+name: Compile Firefly-RK3288 Ubuntu 24.04 LTS with Linux 6.6
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y repo git gcc-arm-linux-gnueabihf u-boot-tools device-tree-compiler mtools parted libudev-dev libusb-1.0-0-dev python3-linaro-image-tools linaro-image-tools libssl-dev autotools-dev libsigsegv2 m4 libdrm-dev curl sed make binutils build-essential gcc g++ bash patch gzip bzip2 perl tar cpio python3 unzip rsync file bc wget libncurses5 libglib2.0-dev openssh-client lib32stdc++6 gcc-aarch64-linux-gnu libncurses5-dev lzop libssl1.0.0 libssl-dev libglade2-dev cvs mercurial subversion asciidoc w3m dblatex graphviz python3-matplotlib libc6:i386 texinfo liblz4-tool genext2fs expect autoconf intltool libqt4-dev libgtk2.0-dev debootstrap qemu-user-static binfmt-support
+
+      - name: Repo init and sync SDK
+        run: |
+          mkdir sdk
+          cd sdk
+          repo init --no-clone-bundle --repo-url https://gitlab.com/firefly-linux/git-repo.git -u https://gitlab.com/firefly-linux/manifests.git -b master -m rk3288_linux_release.xml
+          repo sync -c --no-tags
+          repo start firefly --all
+
+      - name: Compile U-Boot (official)
+        run: |
+          cd sdk
+          ./build.sh firefly-rk3288-ubuntu.mk  # Set board config
+          ./build.sh uboot
+
+      - name: Upgrade and compile Kernel 6.6
+        run: |
+          cd sdk
+          mv kernel kernel-old  # Backup old kernel
+          wget https://www.kernel.org/pub/linux/kernel/v6.x/linux-6.6.tar.xz
+          tar -xJf linux-6.6.tar.xz
+          mv linux-6.6 kernel
+          mkdir -p kernel/arch/arm/boot/dts/rockchip
+          cp kernel-old/arch/arm/boot/dts/rk3288-firefly* kernel/arch/arm/boot/dts/rockchip/  # Copy official DTS
+          cp kernel-old/arch/arm/boot/dts/rk3288.dtsi kernel/arch/arm/boot/dts/rockchip/  # Copy includes if needed
+          cd kernel
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- multi_v7_defconfig
+          # Optional: Adapt old config if needed: cp ../kernel-old/.config . && make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- oldconfig
+          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(nproc) zImage modules dtbs
+          cd ..
+          # Create resource.img and kernel.img as SDK expects (using mkimage)
+          ./kernel/scripts/mkkrnlimg kernel/arch/arm/boot/zImage kernel/kernel.img
+          cat kernel/arch/arm/boot/dts/rockchip/rk3288-firefly.dtb >> kernel/kernel.img  # Append DTB
+          ./kernel/scripts/resource_tool kernel/arch/arm/boot/dts/rockchip/rk3288-firefly.dtb kernel/resource.img  # If resource_tool exists; else skip if not needed
+
+      - name: Build Ubuntu 24.04 LTS armhf rootfs
+        run: |
+          cd sdk
+          sudo mkdir -p ubuntu_rootfs
+          sudo debootstrap --arch=armhf --foreign noble ubuntu_rootfs/rootfs http://ports.ubuntu.com/ubuntu-ports
+          sudo cp /usr/bin/qemu-arm-static ubuntu_rootfs/rootfs/usr/bin/
+          sudo chroot ubuntu_rootfs/rootfs /debootstrap/debootstrap --second-stage
+          # Basic config (add more packages as needed)
+          sudo chroot ubuntu_rootfs/rootfs /bin/bash -c "echo 'root:root' | chpasswd"
+          sudo chroot ubuntu_rootfs/rootfs /bin/bash -c "apt-get update && apt-get install -y sudo vim net-tools ssh locales && locale-gen en_US.UTF-8"
+          # Pack into ext4 img (size adjust as needed, SDK default ~6000MB)
+          sudo dd if=/dev/zero of=ubuntu_rootfs/rk3288_ubuntu_rootfs.img bs=1M count=6000 status=progress
+          sudo mkfs.ext4 -d ubuntu_rootfs/rootfs ubuntu_rootfs/rk3288_ubuntu_rootfs.img
+
+      - name: Pack firmware for eMMC
+        run: |
+          cd sdk
+          ./mkfirmware.sh  # Link images to rockdev/
+          ./build.sh updateimg  # Generate eMMC image in rockdev/pack/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firefly-rk3288-ubuntu-24.04-lts-linux6.6.img
+          path: sdk/rockdev/pack/*.img
